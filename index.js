@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const app = express();
@@ -22,8 +23,10 @@ const client = new MongoClient(uri, {
   }
 });
 
-// Global variable for collection
+// Global variables for collections
 let usersCollection;
+let doctorsCollection;
+let appointmentsCollection;
 
 // Connect to MongoDB
 async function run() {
@@ -31,9 +34,11 @@ async function run() {
     await client.connect();
     console.log("Database connected successfully");
 
-    // Initialize database and collection
+    // Initialize database and collections
     const database = client.db("DocAppoint");
     usersCollection = database.collection("users");
+    doctorsCollection = database.collection("doctors");
+    appointmentsCollection = database.collection("appointments");
 
   } catch (error) {
     console.error("Database error:", error.message);
@@ -41,15 +46,131 @@ async function run() {
 }
 run().catch(console.dir);
 
-// Test route to check database connection status
-app.get('/test-db', async (req, res) => {
-  try {
-    if (!usersCollection) {
-      return res.status(500).send({ success: false, message: "Database not ready" });
+// JWT Middleware for Security
+const verifyJWT = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ message: 'Unauthorized access' });
+  }
+  const token = authHeader.split(' ')[1];
+  jwt.verify(token, process.env.JWT_SECRET || 'secret_key', (err, decoded) => {
+    if (err) {
+      return res.status(403).send({ message: 'Forbidden access' });
     }
-    // Count total documents in users collection
-    const count = await usersCollection.countDocuments();
-    res.send({ success: true, message: "MongoDB is working", totalUsers: count });
+    req.decoded = decoded;
+    next();
+  });
+};
+
+// --- API ROUTES ---
+
+// 1. JWT Generator Route
+app.post('/jwt', (req, res) => {
+  const user = req.body;
+  const token = jwt.sign(user, process.env.JWT_SECRET || 'secret_key', { expiresIn: '1h' });
+  res.send({ token });
+});
+
+// 2. Doctors APIs (Get All & Top Rated)
+app.get('/doctors', async (req, res) => {
+  try {
+    const search = req.query.search || "";
+    let query = {};
+    if (search) {
+      query = { name: { $regex: search, $options: "i" } };
+    }
+    const cursor = doctorsCollection.find(query);
+    const result = await cursor.toArray();
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// Seed data route to insert doctors from data.json easily
+app.post('/seed-doctors', async (req, res) => {
+  try {
+    const doctors = req.body;
+    const result = await doctorsCollection.insertMany(doctors);
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// 3. Appointment Booking API (Create)
+app.post('/appointments', async (req, res) => {
+  try {
+    const booking = req.body;
+    const result = await appointmentsCollection.insertOne(booking);
+    res.send({ success: true, result, message: "Appointment booked successfully!" });
+  } catch (error) {
+    res.status(500).send({ success: false, error: error.message });
+  }
+});
+
+// 4. Get User Specific Bookings (Read)
+app.get('/my-bookings', async (req, res) => {
+  try {
+    const email = req.query.email;
+    const query = { userEmail: email };
+    const result = await appointmentsCollection.find(query).toArray();
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+// 5. Update Appointment API (Update)
+app.put('/appointments/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const filter = { _id: new ObjectId(id) };
+    const updatedData = req.body;
+    
+    const updateDoc = {
+      $set: {
+        patientName: updatedData.patientName,
+        gender: updatedData.gender,
+        phone: updatedData.phone,
+        appointmentDate: updatedData.appointmentDate,
+        appointmentTime: updatedData.appointmentTime,
+      },
+    };
+
+    const result = await appointmentsCollection.updateOne(filter, updateDoc);
+    res.send({ success: true, result, message: "Appointment updated successfully!" });
+  } catch (error) {
+    res.status(500).send({ success: false, error: error.message });
+  }
+});
+
+// 6. Delete Appointment API (Delete)
+app.delete('/appointments/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const result = await appointmentsCollection.deleteOne(query);
+    res.send({ success: true, result, message: "Appointment deleted successfully!" });
+  } catch (error) {
+    res.status(500).send({ success: false, error: error.message });
+  }
+});
+
+// 7. Profile Update API
+app.put('/users/profile', async (req, res) => {
+  try {
+    const email = req.query.email;
+    const filter = { email: email };
+    const updatedUser = req.body;
+    const updateDoc = {
+      $set: {
+        name: updatedUser.name,
+        photo: updatedUser.photo,
+      }
+    };
+    const result = await usersCollection.updateOne(filter, updateDoc, { upsert: true });
+    res.send({ success: true, result, message: "Profile updated successfully!" });
   } catch (error) {
     res.status(500).send({ success: false, error: error.message });
   }
