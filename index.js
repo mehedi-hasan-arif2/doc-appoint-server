@@ -64,14 +64,14 @@ const verifyJWT = (req, res, next) => {
 
 // --- API ROUTES ---
 
-// 1. JWT Generator Route
+// JWT Generator Route
 app.post('/jwt', (req, res) => {
   const user = req.body;
   const token = jwt.sign(user, process.env.JWT_SECRET || 'secret_key', { expiresIn: '1h' });
   res.send({ token });
 });
 
-// 2. Doctors APIs (Get All & Top Rated)
+// Doctors APIs 
 app.get('/doctors', async (req, res) => {
   try {
     const search = req.query.search || "";
@@ -87,7 +87,7 @@ app.get('/doctors', async (req, res) => {
   }
 });
 
-// Seed data route to insert doctors from data.json easily
+// data route to insert doctors from data.json 
 app.post('/seed-doctors', async (req, res) => {
   try {
     const doctors = req.body;
@@ -98,7 +98,7 @@ app.post('/seed-doctors', async (req, res) => {
   }
 });
 
-// 3. Appointment Booking API (Create)
+// Appointment Booking API 
 app.post('/appointments', async (req, res) => {
   try {
     const booking = req.body;
@@ -109,7 +109,7 @@ app.post('/appointments', async (req, res) => {
   }
 });
 
-// 4. Get User Specific Bookings (Read)
+// Get User Specific Bookings 
 app.get('/my-bookings', async (req, res) => {
   try {
     const email = req.query.email;
@@ -121,7 +121,7 @@ app.get('/my-bookings', async (req, res) => {
   }
 });
 
-// 5. Update Appointment API (Update)
+// Update Appointment API 
 app.put('/appointments/:id', async (req, res) => {
   try {
     const id = req.params.id;
@@ -145,7 +145,7 @@ app.put('/appointments/:id', async (req, res) => {
   }
 });
 
-// 6. Delete Appointment API (Delete)
+// Delete Appointment API 
 app.delete('/appointments/:id', async (req, res) => {
   try {
     const id = req.params.id;
@@ -157,7 +157,7 @@ app.delete('/appointments/:id', async (req, res) => {
   }
 });
 
-// 7. Profile Update API
+// Profile Update API
 app.put('/users/profile', async (req, res) => {
   try {
     const email = req.query.email;
