@@ -71,13 +71,18 @@ app.post('/jwt', (req, res) => {
   res.send({ token });
 });
 
-// Doctors APIs 
+// Get all doctors with optional search query (by name or specialty)
 app.get('/doctors', async (req, res) => {
   try {
     const search = req.query.search || "";
     let query = {};
     if (search) {
-      query = { name: { $regex: search, $options: "i" } };
+      query = {
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { specialty: { $regex: search, $options: "i" } }
+        ]
+      };
     }
     const cursor = doctorsCollection.find(query);
     const result = await cursor.toArray();
@@ -87,11 +92,24 @@ app.get('/doctors', async (req, res) => {
   }
 });
 
-// data route to insert doctors from data.json 
-app.post('/seed-doctors', async (req, res) => {
+// Get a single doctor details by custom ID (Handles both String and Number types)
+app.get('/doctors/:id', async (req, res) => {
   try {
-    const doctors = req.body;
-    const result = await doctorsCollection.insertMany(doctors);
+    const idParam = req.params.id;
+    
+    // Create an OR query to match id as either a String or a Number
+    const query = {
+      $or: [
+        { id: idParam },
+        { id: parseInt(idParam) || -1 } 
+      ]
+    };
+
+    const result = await doctorsCollection.findOne(query);
+    
+    if (!result) {
+      return res.status(404).send({ message: "Doctor not found" });
+    }
     res.send(result);
   } catch (error) {
     res.status(500).send({ error: error.message });
@@ -99,7 +117,7 @@ app.post('/seed-doctors', async (req, res) => {
 });
 
 // Appointment Booking API 
-app.post('/appointments', async (req, res) => {
+app.post('/api/appointments', async (req, res) => {
   try {
     const booking = req.body;
     const result = await appointmentsCollection.insertOne(booking);
@@ -110,9 +128,12 @@ app.post('/appointments', async (req, res) => {
 });
 
 // Get User Specific Bookings 
-app.get('/my-bookings', async (req, res) => {
+app.get('/api/appointments', async (req, res) => {
   try {
     const email = req.query.email;
+    if (!email) {
+      return res.status(400).send({ error: "Email query parameter is required" });
+    }
     const query = { userEmail: email };
     const result = await appointmentsCollection.find(query).toArray();
     res.send(result);
@@ -121,10 +142,16 @@ app.get('/my-bookings', async (req, res) => {
   }
 });
 
-// Update Appointment API 
-app.put('/appointments/:id', async (req, res) => {
+// Update Appointment API with Safe ObjectId Validation
+app.put('/api/appointments/:id', async (req, res) => {
   try {
     const id = req.params.id;
+    
+    // Validate if the incoming ID is a valid MongoDB ObjectId format
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ success: false, message: "Invalid appointment ID format" });
+    }
+
     const filter = { _id: new ObjectId(id) };
     const updatedData = req.body;
     
@@ -145,10 +172,16 @@ app.put('/appointments/:id', async (req, res) => {
   }
 });
 
-// Delete Appointment API 
-app.delete('/appointments/:id', async (req, res) => {
+// Delete Appointment API with Safe ObjectId Validation
+app.delete('/api/appointments/:id', async (req, res) => {
   try {
     const id = req.params.id;
+
+    // Validate if the incoming ID is a valid MongoDB ObjectId format
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ success: false, message: "Invalid appointment ID format" });
+    }
+
     const query = { _id: new ObjectId(id) };
     const result = await appointmentsCollection.deleteOne(query);
     res.send({ success: true, result, message: "Appointment deleted successfully!" });
